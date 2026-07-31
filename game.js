@@ -2,6 +2,9 @@ const canvas = document.querySelector('#game');
 const ctx = canvas.getContext('2d');
 const intro = document.querySelector('#intro');
 const startButton = document.querySelector('#startButton');
+const joystick = document.querySelector('#joystick');
+const joystickKnob = joystick.querySelector('i');
+const fireButton = document.querySelector('#fireButton');
 const hud = { score:document.querySelector('#score'), timer:document.querySelector('#timer'), health:document.querySelector('#health'), message:document.querySelector('#message'), damage:document.querySelector('#damage') };
 
 const map = [
@@ -10,6 +13,7 @@ const map = [
 const player = { x:1.55, y:1.55, angle:0, health:100 };
 const keys = new Set(); let last = 0, running = false, score = 0, timeLeft = 60, flash = 0, messageTimer = 0;
 let enemies = [], particles = [];
+let moveX = 0, moveY = 0, stickPointer = null, aimTouch = null;
 
 function resize(){ canvas.width=innerWidth; canvas.height=innerHeight; }
 addEventListener('resize', resize); resize();
@@ -30,6 +34,22 @@ document.addEventListener('pointerlockchange',()=>{if(running && document.pointe
 addEventListener('keydown',e=>{keys.add(e.code);if(e.code==='KeyR')start();if(e.code==='Space'){e.preventDefault();shoot();}});addEventListener('keyup',e=>keys.delete(e.code));
 addEventListener('mousemove',e=>{if(document.pointerLockElement===canvas && running)player.angle+=e.movementX*.0027;});
 
+// Mobile: left virtual stick moves; drag anywhere else to look around; FIRE shoots.
+function setStick(event){
+  const r=joystick.getBoundingClientRect(), dx=event.clientX-(r.left+r.width/2), dy=event.clientY-(r.top+r.height/2), max=r.width*.32;
+  const length=Math.hypot(dx,dy), scale=length>max?max/length:1;
+  moveX=(dx*scale)/max; moveY=(-dy*scale)/max;
+  joystickKnob.style.transform=`translate(${dx*scale}px,${dy*scale}px)`;
+}
+function clearStick(){moveX=0;moveY=0;stickPointer=null;joystickKnob.style.transform='translate(0,0)';}
+joystick.addEventListener('pointerdown',event=>{if(!running)return;stickPointer=event.pointerId;joystick.setPointerCapture(event.pointerId);setStick(event);event.preventDefault();});
+joystick.addEventListener('pointermove',event=>{if(event.pointerId===stickPointer)setStick(event);});
+joystick.addEventListener('pointerup',clearStick);joystick.addEventListener('pointercancel',clearStick);
+fireButton.addEventListener('pointerdown',event=>{if(running){shoot();event.preventDefault();}});
+canvas.addEventListener('touchstart',event=>{if(!running)return;const touch=event.changedTouches[0];aimTouch={id:touch.identifier,x:touch.clientX};event.preventDefault();},{passive:false});
+canvas.addEventListener('touchmove',event=>{if(!running||!aimTouch)return;for(const touch of event.changedTouches)if(touch.identifier===aimTouch.id){player.angle+=(touch.clientX-aimTouch.x)*.006;aimTouch.x=touch.clientX;event.preventDefault();break;}},{passive:false});
+canvas.addEventListener('touchend',event=>{for(const touch of event.changedTouches)if(aimTouch&&touch.identifier===aimTouch.id)aimTouch=null;});
+
 function lineOfSight(x,y){
   const dx=x-player.x,dy=y-player.y,dist=Math.hypot(dx,dy),steps=Math.ceil(dist/.05);
   for(let i=1;i<steps;i++)if(solid(player.x+dx*i/steps,player.y+dy*i/steps))return false;
@@ -44,6 +64,7 @@ function shoot(){
 function update(dt){
   if(!running)return; timeLeft-=dt; if(timeLeft<=0){finish('TIME UP // SCORE '+score);return;}
   let mx=0,my=0; const speed=2.4*dt; if(keys.has('KeyW')){mx+=Math.cos(player.angle)*speed;my+=Math.sin(player.angle)*speed}if(keys.has('KeyS')){mx-=Math.cos(player.angle)*speed;my-=Math.sin(player.angle)*speed}if(keys.has('KeyA')){mx+=Math.cos(player.angle-Math.PI/2)*speed;my+=Math.sin(player.angle-Math.PI/2)*speed}if(keys.has('KeyD')){mx+=Math.cos(player.angle+Math.PI/2)*speed;my+=Math.sin(player.angle+Math.PI/2)*speed}
+  mx+=(Math.cos(player.angle)*moveY+Math.cos(player.angle+Math.PI/2)*moveX)*speed;my+=(Math.sin(player.angle)*moveY+Math.sin(player.angle+Math.PI/2)*moveX)*speed;
   if(!solid(player.x+mx,player.y))player.x+=mx;if(!solid(player.x,player.y+my))player.y+=my;
   enemies.forEach(e=>{ e.t+=dt; const d=Math.hypot(e.x-player.x,e.y-player.y); if(d>1.15 && lineOfSight(e.x,e.y)){e.x+=Math.cos(Math.atan2(player.y-e.y,player.x-e.x))*dt*.38;e.y+=Math.sin(Math.atan2(player.y-e.y,player.x-e.x))*dt*.38;} if(d<.72){player.health=Math.max(0,player.health-Math.ceil(dt*20));hud.damage.style.opacity='.75';if(player.health===0)finish('SIMULATION FAILED');} });
   particles=particles.filter(p=>(p.life-=dt)>0);particles.forEach(p=>{p.x+=p.dx*dt;p.y+=p.dy*dt});hud.damage.style.opacity=Math.max(0,Number(hud.damage.style.opacity||0)-dt*2);if(messageTimer>0 && (messageTimer-=dt)<=0)hud.message.classList.remove('show'); if(enemies.length===0){score+=Math.ceil(timeLeft*10);finish('RANGE CLEARED // SCORE '+score)}updateHud();
