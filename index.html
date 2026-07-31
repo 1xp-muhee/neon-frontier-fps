@@ -27,9 +27,16 @@
       <h1>NEON<br><strong>FRONTIER</strong></h1>
       <p>60초 안에 드론을 격추하세요.<br>드론과 충돌하면 쉴드가 줄어듭니다.</p>
       <button id="startButton">훈련 시작</button>
+      <div id="roomPanel">
+        <input id="roomInput" maxlength="10" autocomplete="off" placeholder="방 코드 입력">
+        <button id="hostButton" class="roomButton">협동 방 만들기</button>
+        <button id="joinButton" class="roomButton">방 참가</button>
+        <span id="roomStatus"></span>
+      </div>
       <small>WASD 이동 · 마우스 조준 · 클릭 발사</small>
     </section>
   </main>
+  <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
   <script src="game.js"></script>
 </body>
 </html>
